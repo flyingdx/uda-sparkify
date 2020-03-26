@@ -1,7 +1,7 @@
 # uda-sparkify
-# Sparkify项目报告
+# 音乐服务流失用户预测
 ## 项目简介
-该项目是优达毕业项目。数据集是一个音乐服务的用户日志，包含了用户信息，歌曲信息，用户活动，时间戳等。大小128M。需要通过数据集中信息，预测出可能流失的用户，以便后续对相应用户采取挽留措施
+项目数据集是一个音乐服务的用户日志，包含了用户信息，歌曲信息，用户活动，时间戳等。大小128M。需要通过数据集中信息，预测出可能流失的用户，以便后续对相应用户采取挽留措施
 
 
 ## 项目思路
@@ -16,10 +16,10 @@
 ## 项目实现
 ### 1.加载所需的库并实例化
 #### 加载所需的库：
-项目会用到一下库
-* 1、pyspark.sql：spark中进行类似SQL中的操作
-* 2、pyspark.ml：spark中进行机器学习
-* 3、pandas 、numpy：对dataframe进行操作
+项目涉及的库
+* 1、pyspark.sql：进行类似SQL操作
+* 2、pyspark.ml：进行机器学习
+* 3、pandas 、numpy：对dataframe操作
 * 4、matplotlib、seaborn： 绘图
 * 5、time：记录代码块运行时间的库
 
@@ -30,17 +30,17 @@ spark=SparkSession.builder.getOrCreate()
 
 ### 2.加载与清洗数据
 #### 加载数据集
-数据集是json格式，由于文件过大，免费版github不支持上传。将文件压缩。
+原始数据集是json格式，由于需上传github，压缩为bz2格式。
 ```python
 df=spark.read.json('mini_sparkify_event_data.json.bz2')
 ```
 #### 评估数据集
-对数据集评估思路是：先查看整体情况，再查看重点希望了解的列的情况。
-* 1、查看整体情况的方法如下：
-* （1）查看数据前几行的值，了解数据集概况，对数据集有整体认识。主要使用了.show()函数
-* （2）查看列数、每列的名称以及类型，并结合以上了解每列的含义。主要使用.printSchema()函数
+对数据先查看整体情况，再查看重点希望了解的列的情况。
+* 1、查看整体情况：
+* （1）查看数据前几行的值，了解数据集概况，对数据集有整体认识。主要使用show()函数
+* （2）查看列数、每列的名称以及类型，并结合以上了解每列的含义。主要使用printSchema()函数
 * （3）查看数据行数。主要使用.count()函数
-通过以上观察，我们可了解到：数据集共有286500行,18列；主要包含了用户信息，歌曲信息，用户活动，时间戳等信息。变量含义如下：
+通过以上观察，我们可了解到：数据集共有286500行,18列；主要包含了用户信息，歌曲信息，用户活动，时间戳等信息。变量含义推测如下：
 ```python
  |-- artist: string (歌手)
  |-- auth: string (含义暂不明确)
@@ -63,8 +63,8 @@ df=spark.read.json('mini_sparkify_event_data.json.bz2')
 
 ```
 
-2、对某一列进行查看的方法如下：
-* 通过dropDuplicates()去重查看唯一值；sort对于有数值的进行排序
+* 2、查看某一列的值分布：
+通过dropDuplicates()去重查看唯一值；sort对于有数值的进行排序，便于查看
 ```python
 df.select('userId').dropDuplicates().sort('userId').show()
 ```
@@ -80,12 +80,13 @@ df.select('userId').dropDuplicates().sort('userId').show()
 +------+
 only showing top 5 rows
 ```
-通过对各列进行查看，我们发现：userId列存在非NA的空值，需要删除
+通过对各列进行查看，我们发现：
+userId列存在非NA的空值，需要删除
 
 
 #### 清理数据集
 ##### 处理空值
-先通过dropna()，处理userId列空值；
+先通过dropna()，处理userId、sessionId列空值；
 
 ```python
 df_clean=df.dropna(how="any",subset=["userId","sessionId"])
@@ -97,13 +98,12 @@ df_clean=df_clean.filter(df["userId"]!="")
 ```
 ### 3.探索性数据分析
 ##### 建立注销客户的标签
-* 项目提示使用churn作为模型的标签, 并且建议使用Cancellation Confirmation事件来定义客户流失.。
+项目提示使用churn作为模型的标签, 并且建议使用Cancellation Confirmation事件来定义客户流失.。
 * 1、标记注销事件：新建一列churn_event列，标记page中的Cancellation Confirmation事件
 * 2、标记注销用户：新建一列churn_user列，标记注销用户。具体方法是，只要用户churn_event中有标记注销，该用户所有的churn列均标记为注销
 
 ##### 建立注销客户的标签
 定义好客户流失后, 进行探索性数据分析, 观察留存用户和流失用户的行为。绘图观察主要使用了直方图、小提琴图。相比箱线图，小提琴图更能看出密度分布
-
 1、注销与用户添加播放列表数量的关系
 
 ```python
@@ -145,7 +145,7 @@ ax=sns.barplot(x='gender',y='count',hue='churn_user',data=gender_churn)
 *  男性用户注销账户的绝对人数以及比例均比女性大
 
 
-### 4.构建预特征
+### 4.构建特征
 #### 变量选择
 结合经验及以上的分析，构建以下变量：
 1、听歌情况方面的变量：
@@ -253,12 +253,12 @@ train,validation,test=data.randomSplit([0.6,0.2,0.2],seed=42)
 #### 模型选择
 **模型选择思路**
 * 选用逻辑回归、支持向量机、随机森林进行对比，这几个模型一般不需要很多参数调整就可以达到不错的效果。他们的优缺点如下：
-* 1、逻辑回归：优点：计算速度快，容易理解；缺点：容易产生欠拟合
-* 2、支持向量机：数据量较小情况下解决机器学习问题，可以解决非线性问题。缺点：对缺失数据敏感
+* 1、逻辑回归：优点：计算速度快；缺点：容易产生欠拟合
+* 2、支持向量机：数据量较小情况下解决机器学习问题。缺点：对缺失数据敏感
 * 3、随机森林：优点：有抗过拟合能力。通过平均决策树，降低过拟合的风险性。缺点：大量的树结构会占用大量的空间和利用大量时间
 
 **模型训练**
-```
+
 * Random Forest
 
 ```python
@@ -275,9 +275,8 @@ evaluator=MulticlassClassificationEvaluator(predictionCol="prediction")#评分�
 print('Random Forest:')
 print('F-1 Score:{}'.format(evaluator.evaluate(results_rf,{evaluator.metricName:"f1"})))#计算F-1 Score
 ```
-
 * LogisticRegression、LinearSVC
-逻辑回归、支持向量机模型代码与随机森林与结构基本一致，主要是需要将代码改为对应模型
+逻辑回归、支持向量机模型代码与随机森林与结构基本一致
 
 **计算结果**
 * LogisticRegression模型：F-1 Score为0.7096；耗时121s
@@ -318,7 +317,6 @@ print('Test:')
 print('Accuracy:{}'.format(evaluator.evaluate(results_final,{evaluator.metricName:"accuracy"})))
 print('F-1 Score:{}'.format(evaluator.evaluate(results_final,{evaluator.metricName:"f1"})))
 ```
-
 在测试集上运算后：F-1 Score:0.6591，和在验证集的结果上相比，F-1 Score有下降。模型存在在过拟合
 
 ### 6.结论汇总
@@ -330,9 +328,9 @@ print('F-1 Score:{}'.format(evaluator.evaluate(results_final,{evaluator.metricNa
 * 接着我们使用交叉验证和参数网络搜索调优随机森林的参数，对测试集进行预测。预测结果F-1 Score:0.6591
 
 **过程反思**
-* 对比各未经优化的模型间F-1 Score，各模型相差不大。后续想有较大幅度提升，除了选取更优模型，更多可能需要从创建更合适的特征变量入手
+* 对比各未经优化的模型间F-1 Score，各模型相差不大。随机森林调优前后的提升也并不大。后续想有较大幅度提升，除了选取更优模型，更多可能需要从创建更合适的特征变量入手
 * 数据集中，现成的可用于预测的特征并不多；我们需要重新构造特征来预测流失用户。而从数据集中构造变量，除了需要探索、熟悉手上的数据；还需要经验与知识的积累
 #### 改进
-* 1、该数据集放在现实中，数据量并不大。如果进一步增加数据量，可以得到预测效果更好的模型
+* 1、相比于完整数据集（12G），数据量并不大。如果进一步增加数据量，可以得到预测效果更好的模型
 * 2、用于预测流失用户的特征进一步增加完善，找到与数据集相关性更强的特征，以提升模型性能。如增加用户注销账户时的的等级作为特征；或者对未理解未探索的特征进一步研究
 * 3、选用决策树、梯度提升树等其他算法，观察accuracy与f1分数变化，对比已使用的算法，选取更优模型
